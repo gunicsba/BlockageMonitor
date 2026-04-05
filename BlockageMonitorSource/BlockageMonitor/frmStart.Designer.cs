@@ -30,7 +30,12 @@
         {
             this.components = new System.ComponentModel.Container();
             System.Windows.Forms.DataVisualization.Charting.ChartArea chartArea1 = new System.Windows.Forms.DataVisualization.Charting.ChartArea();
-            System.Windows.Forms.DataVisualization.Charting.Series series1 = new System.Windows.Forms.DataVisualization.Charting.Series();
+            System.Windows.Forms.DataVisualization.Charting.Legend legend1 = new System.Windows.Forms.DataVisualization.Charting.Legend();
+            System.Windows.Forms.DataVisualization.Charting.Series seriesNormal = new System.Windows.Forms.DataVisualization.Charting.Series();
+            System.Windows.Forms.DataVisualization.Charting.Series seriesSkipped = new System.Windows.Forms.DataVisualization.Charting.Series();
+            System.Windows.Forms.DataVisualization.Charting.Series seriesMultiple = new System.Windows.Forms.DataVisualization.Charting.Series();
+            System.Windows.Forms.DataVisualization.Charting.Series seriesAvgOutline = new System.Windows.Forms.DataVisualization.Charting.Series();
+            System.Windows.Forms.DataVisualization.Charting.Series seriesAvgCenter = new System.Windows.Forms.DataVisualization.Charting.Series();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(frmStart));
             this.dataSet1 = new System.Data.DataSet();
             this.dataTable1 = new System.Data.DataTable();
@@ -50,6 +55,7 @@
             this.mnuSettings = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.sensorsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.networkToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.modeToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.transparentToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);
@@ -144,10 +150,11 @@
             this.mnuSettings.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.sensorsToolStripMenuItem,
             this.networkToolStripMenuItem,
+            this.modeToolStripMenuItem,
             this.transparentToolStripMenuItem,
             this.exitToolStripMenuItem});
             this.mnuSettings.Name = "mnuSettings";
-            this.mnuSettings.Size = new System.Drawing.Size(182, 116);
+            this.mnuSettings.Size = new System.Drawing.Size(182, 144);
             // 
             // sensorsToolStripMenuItem
             // 
@@ -164,6 +171,13 @@
             this.networkToolStripMenuItem.Size = new System.Drawing.Size(181, 28);
             this.networkToolStripMenuItem.Text = "Modules";
             this.networkToolStripMenuItem.Click += new System.EventHandler(this.networkToolStripMenuItem_Click);
+            //
+            // modeToolStripMenuItem
+            //
+            this.modeToolStripMenuItem.Name = "modeToolStripMenuItem";
+            this.modeToolStripMenuItem.Size = new System.Drawing.Size(181, 28);
+            this.modeToolStripMenuItem.Text = "Mode: Seeder";
+            this.modeToolStripMenuItem.Click += new System.EventHandler(this.modeToolStripMenuItem_Click);
             // 
             // transparentToolStripMenuItem
             // 
@@ -191,11 +205,51 @@
             chartArea1.AxisY.Minimum = 0D;
             chartArea1.Name = "ChartArea1";
             this.chart1.ChartAreas.Add(chartArea1);
+            // Legend for stacked bar chart
+            legend1.Name = "Legend1";
+            legend1.Docking = System.Windows.Forms.DataVisualization.Charting.Docking.Top;
+            this.chart1.Legends.Add(legend1);
             this.chart1.Location = new System.Drawing.Point(12, 12);
             this.chart1.Name = "chart1";
-            series1.ChartArea = "ChartArea1";
-            series1.Name = "Series1";
-            this.chart1.Series.Add(series1);
+            // Normal population series (bottom of stack - green)
+            seriesNormal.ChartArea = "ChartArea1";
+            seriesNormal.Legend = "Legend1";
+            seriesNormal.Name = "Normal";
+            seriesNormal.Color = System.Drawing.Color.Green;
+            seriesNormal.ChartType = System.Windows.Forms.DataVisualization.Charting.SeriesChartType.StackedColumn;
+            // Multiple population series (middle of stack - orange)
+            seriesMultiple.ChartArea = "ChartArea1";
+            seriesMultiple.Legend = "Legend1";
+            seriesMultiple.Name = "Multiple";
+            seriesMultiple.Color = System.Drawing.Color.Orange;
+            seriesMultiple.ChartType = System.Windows.Forms.DataVisualization.Charting.SeriesChartType.StackedColumn;
+            // Skipped/Missed population series (top of stack - red)
+            seriesSkipped.ChartArea = "ChartArea1";
+            seriesSkipped.Legend = "Legend1";
+            seriesSkipped.Name = "Skipped";
+            seriesSkipped.Color = System.Drawing.Color.Red;
+            seriesSkipped.ChartType = System.Windows.Forms.DataVisualization.Charting.SeriesChartType.StackedColumn;
+            // Average line - black outline (4px)
+            seriesAvgOutline.ChartArea = "ChartArea1";
+            seriesAvgOutline.Legend = "Legend1";
+            seriesAvgOutline.Name = "AvgOutline";
+            seriesAvgOutline.Color = System.Drawing.Color.Black;
+            seriesAvgOutline.ChartType = System.Windows.Forms.DataVisualization.Charting.SeriesChartType.Line;
+            seriesAvgOutline.BorderWidth = 4;
+            seriesAvgOutline.MarkerStyle = System.Windows.Forms.DataVisualization.Charting.MarkerStyle.None;
+            // Average line - white center (2px)
+            seriesAvgCenter.ChartArea = "ChartArea1";
+            seriesAvgCenter.Legend = "Legend1";
+            seriesAvgCenter.Name = "AvgCenter";
+            seriesAvgCenter.Color = System.Drawing.Color.White;
+            seriesAvgCenter.ChartType = System.Windows.Forms.DataVisualization.Charting.SeriesChartType.Line;
+            seriesAvgCenter.BorderWidth = 2;
+            seriesAvgCenter.MarkerStyle = System.Windows.Forms.DataVisualization.Charting.MarkerStyle.None;
+            this.chart1.Series.Add(seriesNormal);
+            this.chart1.Series.Add(seriesMultiple);
+            this.chart1.Series.Add(seriesSkipped);
+            this.chart1.Series.Add(seriesAvgOutline);
+            this.chart1.Series.Add(seriesAvgCenter);
             this.chart1.Size = new System.Drawing.Size(797, 200);
             this.chart1.TabIndex = 189;
             this.chart1.Text = "chart1";
@@ -289,6 +343,7 @@
         private System.Windows.Forms.DataVisualization.Charting.Chart chart1;
         private System.Windows.Forms.ToolStripMenuItem transparentToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exitToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem modeToolStripMenuItem;
     }
 }
 

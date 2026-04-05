@@ -74,7 +74,11 @@ namespace BlockageMonitor
                 if (int.TryParse(tbSeconds.Text, out int sec)) mf.BlockSeconds = sec;
 
                 if (int.TryParse(tbRows.Text, out int rs)) mf.RowCount = rs;
-                if (mf.RowCount != mf.SeedRows.Count) mf.SeedRows.Load(rs);
+                if (mf.RowCount != mf.SeedRows.Count)
+                {
+                    mf.SeedRows.Load(rs);
+                    mf.BlockageModules.BuildRows(mf.RowsPerModule);  // Rebuild module row assignments
+                }
 
                 for (int i = 0; i < DGV.Rows.Count; i++)
                 {

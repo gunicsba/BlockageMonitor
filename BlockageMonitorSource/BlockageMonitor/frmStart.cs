@@ -17,9 +17,11 @@ namespace BlockageMonitor
         public clsAlarm SensorAlarm;
         public PGN32100 Sensors;
         public PGN32200 Sensors200;
+        public PGN32300 SeedMonitoring;  // ISOBUS seed monitoring from Task Controller
         public clsTools Tls;
         public UDPComm UDPaog;
         public UDPComm UDPsensors;
+        public UDPComm UDPseedMonitor;   // UDP for ISOBUS seed monitoring data
 
         private int ButtonRight;
         private int cBlockSeconds = 10;
@@ -27,6 +29,8 @@ namespace BlockageMonitor
         private int cRowCount = 10;
         private int cRowsPerModule = 16;
         private bool cUseTransparent = false;
+        private bool cIsPlanterMode = false;  // false = Seeder mode (original), true = Planter mode (stacked chart)
+        private bool cAutoDetectMode = true;  // Allow auto-detection of planter/seeder based on incoming data
         private bool IsTransparent;
         private int LastRowCount;
         private bool PlayAlarm;
@@ -47,12 +51,15 @@ namespace BlockageMonitor
             LoadData();
             UDPsensors = new UDPComm(this, 25600, 25700, 2388, "Sensors");
             UDPaog = new UDPComm(this, 17777, 15555, 1460, "AOG");
+            UDPseedMonitor = new UDPComm(this, 25800, 25900, 32300, "SeedMonitor");  // Port for ISOBUS seed data
 
             SeedRows = new clsSeedRows(this, cRowCount);
             Sensors = new PGN32100(this);
             Sensors200 = new PGN32200(this);
+            SeedMonitoring = new PGN32300(this);  // ISOBUS seed monitoring PGN
             AutoSteerPGN = new PGN254(this);
             BlockageModules = new clsModules(this, 16);
+            BlockageModules.BuildRows(cRowsPerModule);  // Initialize module row assignments
             SensorAlarm = new clsAlarm(this);
             this.BackColor = Properties.Settings.Default.DayColour;
             chart1.BackColor = Properties.Settings.Default.DayColour;
@@ -101,6 +108,36 @@ namespace BlockageMonitor
             }
         }
 
+        public bool IsPlanterMode
+        {
+            get { return cIsPlanterMode; }
+            set
+            {
+                cIsPlanterMode = value;
+                Tls.SaveProperty("IsPlanterMode", cIsPlanterMode.ToString());
+                // Update menu text
+                UpdateModeMenuText();
+                // Reload chart to reflect mode change
+                LoadChart();
+            }
+        }
+
+        public bool AutoDetectMode
+        {
+            get { return cAutoDetectMode; }
+            set
+            {
+                cAutoDetectMode = value;
+                Tls.SaveProperty("AutoDetectMode", cAutoDetectMode.ToString());
+                UpdateModeMenuText();
+            }
+        }
+
+        private void UpdateModeMenuText()
+        {
+            modeToolStripMenuItem.Text = cIsPlanterMode ? "Mode: Planter" : "Mode: Seeder";
+        }
+
         private void btnAlarm_Click(object sender, EventArgs e)
         {
             PlayAlarm = !PlayAlarm;
@@ -139,6 +176,7 @@ namespace BlockageMonitor
             if (this.WindowState == FormWindowState.Normal) Tls.SaveFormData(this);
             UDPaog.Close();
             UDPsensors.Close();
+            UDPseedMonitor.Close();
         }
 
         private void frmStart_Load(object sender, EventArgs e)
@@ -164,7 +202,16 @@ namespace BlockageMonitor
                     Tls.ShowHelp("UDPagio failed to start.", "", 3000, true, true);
                 }
 
+                UDPseedMonitor.StartUDPServer();
+                if (!UDPseedMonitor.IsUDPSendConnected)
+                {
+                    Tls.ShowHelp("UDPseedMonitor failed to start.", "", 3000, true, true);
+                }
+
                 LoadChart();
+
+                // Update menu text to reflect loaded mode
+                UpdateModeMenuText();
 
                 cMonitoringOn = true;
                 timer1.Enabled = cMonitoringOn;
@@ -203,9 +250,21 @@ namespace BlockageMonitor
 
             chart1.ChartAreas["ChartArea1"].AxisX.Interval = 1;
             chart1.ChartAreas["ChartArea1"].AxisX.Maximum = cRowCount + 1;
+
+            // Clear all series and initialize with zeros
+            chart1.Series["Normal"].Points.Clear();
+            chart1.Series["Skipped"].Points.Clear();
+            chart1.Series["Multiple"].Points.Clear();
+            chart1.Series["AvgOutline"].Points.Clear();
+            chart1.Series["AvgCenter"].Points.Clear();
+
             for (int i = 0; i <= cRowCount; i++)
             {
-                chart1.Series["Series1"].Points.AddXY(i + 1, 0);
+                chart1.Series["Normal"].Points.AddXY(i + 1, 0);
+                chart1.Series["Skipped"].Points.AddXY(i + 1, 0);
+                chart1.Series["Multiple"].Points.AddXY(i + 1, 0);
+                chart1.Series["AvgOutline"].Points.AddXY(i + 1, 0);
+                chart1.Series["AvgCenter"].Points.AddXY(i + 1, 0);
             }
             LastRowCount = cRowCount;
         }
@@ -215,6 +274,8 @@ namespace BlockageMonitor
             if (int.TryParse(Tls.LoadProperty("SeedRowCount"), out int rc)) cRowCount = rc;
             if (int.TryParse(Tls.LoadProperty("BlockSeconds"), out int bs)) cBlockSeconds = bs;
             if (int.TryParse(Tls.LoadProperty("RowsPerModule"), out int rws)) cRowsPerModule = rws;
+            if (bool.TryParse(Tls.LoadProperty("IsPlanterMode"), out bool pm)) cIsPlanterMode = pm;
+            if (bool.TryParse(Tls.LoadProperty("AutoDetectMode"), out bool ad)) cAutoDetectMode = ad;
 
             if (int.TryParse(Tls.LoadProperty("StartWidth"), out int wd))
             {
@@ -318,6 +379,13 @@ namespace BlockageMonitor
             UseTransparent = !cUseTransparent;
             UpdateForm();
         }
+
+        private void modeToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            // Simple toggle: Seeder ↔ Planter
+            IsPlanterMode = !cIsPlanterMode;
+            UpdateForm();
+        }
         private void mouseMove_MouseDown(object sender, MouseEventArgs e)
         {
             // Log the current window location and the mouse location.
@@ -350,10 +418,62 @@ namespace BlockageMonitor
             // chart
             if (cRowCount != LastRowCount) LoadChart();
 
-            chart1.Series["Series1"].Points.Clear();
-            foreach (clsSeedRow RW in SeedRows.Items)
+            double totalValue = 0;
+            int activeRowCount = 0;
+
+            if (cIsPlanterMode)
             {
-                chart1.Series["Series1"].Points.AddXY(RW.ID + 1, RW.RateAverage);
+                // Planter mode: Show stacked chart with Normal, Skipped, Multiple
+                // Clear all series
+                chart1.Series["Normal"].Points.Clear();
+                chart1.Series["Skipped"].Points.Clear();
+                chart1.Series["Multiple"].Points.Clear();
+                chart1.Series["AvgOutline"].Points.Clear();
+                chart1.Series["AvgCenter"].Points.Clear();
+
+                foreach (clsSeedRow RW in SeedRows.Items)
+                {
+                    // Add stacked values for each row
+                    double totalPopulation = RW.NormalPopulation + RW.SkippedPopulation + RW.MultiplePopulation;
+                    chart1.Series["Normal"].Points.AddXY(RW.ID + 1, RW.NormalPopulation);
+                    chart1.Series["Skipped"].Points.AddXY(RW.ID + 1, RW.SkippedPopulation);
+                    chart1.Series["Multiple"].Points.AddXY(RW.ID + 1, RW.MultiplePopulation);
+                    totalValue += totalPopulation;
+                    if (totalPopulation > 0) activeRowCount++;
+                }
+
+                // Calculate and display average line (black outline + white center)
+                double average = activeRowCount > 0 ? totalValue / activeRowCount : 0;
+                for (int i = 0; i < SeedRows.Items.Count; i++)
+                {
+                    chart1.Series["AvgOutline"].Points.AddXY(i + 1, average);
+                    chart1.Series["AvgCenter"].Points.AddXY(i + 1, average);
+                }
+            }
+            else
+            {
+                // Seeder mode: Show original blockage monitoring (just use Normal series for rate)
+                chart1.Series["Normal"].Points.Clear();
+                chart1.Series["Skipped"].Points.Clear();
+                chart1.Series["Multiple"].Points.Clear();
+                chart1.Series["AvgOutline"].Points.Clear();
+                chart1.Series["AvgCenter"].Points.Clear();
+
+                foreach (clsSeedRow RW in SeedRows.Items)
+                {
+                    // Show rate average in the Normal series (green)
+                    chart1.Series["Normal"].Points.AddXY(RW.ID + 1, RW.RateAverage);
+                    totalValue += RW.RateAverage;
+                    if (RW.RateAverage > 0) activeRowCount++;
+                }
+
+                // Calculate and display average line (black outline + white center)
+                double average = activeRowCount > 0 ? totalValue / activeRowCount : 0;
+                for (int i = 0; i < SeedRows.Items.Count; i++)
+                {
+                    chart1.Series["AvgOutline"].Points.AddXY(i + 1, average);
+                    chart1.Series["AvgCenter"].Points.AddXY(i + 1, average);
+                }
             }
 
             // buttons

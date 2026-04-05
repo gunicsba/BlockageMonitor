@@ -155,6 +155,10 @@ namespace BlockageMonitor
                             mf.Sensors200.ParseByteData(Data);
                             break;
 
+                        case 32301: // ISOBUS Seed Monitoring Data (Planter mode)
+                            mf.SeedMonitoring.ParseByteData(Data);
+                            break;
+
                         case 33152: // AOG, 0x81, 0x80
                             switch (Data[3])
                             {

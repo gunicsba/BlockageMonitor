@@ -14,12 +14,20 @@ namespace BlockageMonitor
         private frmStart mf;
         private string Name;
 
+        // ISOBUS DDI values for seed monitoring
+        private double cPopulationRate;      // DDI 12 - Actual Count Per Area Application Rate
+        private double cSkipPercentage;      // DDI 417 - Actual Seed Skip Percentage
+        private double cMultiplePercentage;  // DDI 419 - Actual Seed Multiple Percentage
+
         public clsSeedRow(frmStart CF, int ID)
         {
             mf = CF;
             cID = ID;
             Name = "SeedRow" + ID.ToString();
             cEnabled = true;
+            cPopulationRate = 0;
+            cSkipPercentage = 0;
+            cMultiplePercentage = 0;
         }
 
         public bool Enabled
@@ -97,6 +105,54 @@ namespace BlockageMonitor
             {
                 mf.Tls.SaveProperty(Name + "_Enabled", cEnabled.ToString());
                 cEdited = false;
+            }
+        }
+
+        // ISOBUS DDI property accessors
+        public double PopulationRate
+        {
+            get { return cPopulationRate; }
+            set { cPopulationRate = value; }
+        }
+
+        public double SkipPercentage
+        {
+            get { return cSkipPercentage; }
+            set { cSkipPercentage = value; }
+        }
+
+        public double MultiplePercentage
+        {
+            get { return cMultiplePercentage; }
+            set { cMultiplePercentage = value; }
+        }
+
+        // Calculated values for stacked chart display
+        public double NormalPopulation
+        {
+            get
+            {
+                // Normal = Population * (1 - Skip% - Multiple%)
+                double normalFactor = Math.Max(0, 1.0 - (cSkipPercentage / 100.0) - (cMultiplePercentage / 100.0));
+                return cPopulationRate * normalFactor;
+            }
+        }
+
+        public double SkippedPopulation
+        {
+            get
+            {
+                // Skipped portion = Population * Skip%
+                return cPopulationRate * (cSkipPercentage / 100.0);
+            }
+        }
+
+        public double MultiplePopulation
+        {
+            get
+            {
+                // Multiple portion = Population * Multiple%
+                return cPopulationRate * (cMultiplePercentage / 100.0);
             }
         }
     }

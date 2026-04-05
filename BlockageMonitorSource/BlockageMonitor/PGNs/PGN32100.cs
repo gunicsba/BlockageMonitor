@@ -39,8 +39,13 @@ namespace BlockageMonitor
                 ModuleID = (byte)(data[2] & 0b1111);
                 RowID = (byte)(data[2] >> 4);
                 clsModule Md = mf.BlockageModules.Items[ModuleID];
-                mf.SeedRows.Items[Md.StartRow + RowID].ReceiveTime = DateTime.Now;
-                mf.SeedRows.Items[Md.StartRow + RowID].Rate = data[3];
+                // StartRow is 1-based, so subtract 1 for 0-based SeedRows.Items index
+                int rowIndex = Md.StartRow - 1 + RowID;
+                if (rowIndex < mf.SeedRows.Items.Count)
+                {
+                    mf.SeedRows.Items[rowIndex].ReceiveTime = DateTime.Now;
+                    mf.SeedRows.Items[rowIndex].Rate = data[3];
+                }
                 Result = true;
             }
             return Result;

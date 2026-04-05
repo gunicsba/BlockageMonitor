@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "TAG=$tag" >> $env:GITHUB_OUTPUT
+          echo "Version: $version"
+
+      # --- Stamp version into Monitor AssemblyInfo (build-time only) ---
+      - name: Stamp Monitor version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $parts = $version.Split('.')
+          # Ensure 4-part assembly version (Major.Minor.Build.Revision)
+          while ($parts.Length -lt 4) { $parts += '0' }
+          $asmVersion = ($parts[0..3]) -join '.'
+
+          $file = "BlockageMonitorSource\BlockageMonitor\Properties\AssemblyInfo.cs"
+          $content = Get-Content $file -Raw
+          $content = $content -replace 'AssemblyVersion\("[^"]*"\)',     "AssemblyVersion(`"$asmVersion`")"
+          $content = $content -replace 'AssemblyFileVersion\("[^"]*"\)', "AssemblyFileVersion(`"$asmVersion`")"
+          Set-Content -Path $file -Value $content -NoNewline
+          echo "Stamped AssemblyInfo with version $asmVersion"
+
+      # --- Build BlockageMonitor (.NET Framework 4.7.2) ---
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore BlockageMonitorSource\BlockageMonitor.sln
+
+      - name: Build BlockageMonitor
+        run: msbuild BlockageMonitorSource\BlockageMonitor.sln /p:Configuration=Release /p:Platform="Any CPU" /m
+
+      # --- Build BlockageSimulator (.NET 10) ---
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish BlockageSimulator
+        run: >
+          dotnet publish BlockageSimulator\BlockageSimulator.csproj
+          -c Release
+          -r win-x64
+          --self-contained
+          -o publish\BlockageSimulator
+          /p:Version=${{ steps.version.outputs.VERSION }}
+
+      # --- Package ---
+      - name: Package BlockageMonitor
+        shell: pwsh
+        run: |
+          $v = "${{ steps.version.outputs.VERSION }}"
+          Compress-Archive -Path "BlockageMonitorSource\BlockageMonitor\bin\Release\*" `
+                           -DestinationPath "BlockageMonitor-v$v.zip"
+
+      - name: Package BlockageSimulator
+        shell: pwsh
+        run: |
+          $v = "${{ steps.version.outputs.VERSION }}"
+          Compress-Archive -Path "publish\BlockageSimulator\*" `
+                           -DestinationPath "BlockageSimulator-v$v.zip"
+
+      # --- Create GitHub Release ---
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release v${{ steps.version.outputs.VERSION }}
+          tag_name: ${{ steps.version.outputs.TAG }}
+          generate_release_notes: true
+          files: |
+            BlockageMonitor-v${{ steps.version.outputs.VERSION }}.zip
+            BlockageSimulator-v${{ steps.version.outputs.VERSION }}.zip
+
+      # --- Update VERSION file on main branch ---
+      - name: Update VERSION file in repository
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $repo   = "${{ github.repository }}"
+
+          # Get the default branch
+          $defaultBranch = gh api "repos/$repo" --jq '.default_branch'
+
+          # Get current file SHA (if VERSION file already exists)
+          $sha = $null
+          try {
+            $sha = gh api "repos/$repo/contents/VERSION?ref=$defaultBranch" --jq '.sha' 2>$null
+          } catch {}
+
+          $content = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($version))
+
+          $body = @{
+            message = "Update VERSION to $version [skip ci]"
+            content = $content
+            branch  = $defaultBranch
+          }
+          if ($sha) { $body.sha = $sha }
+
+          $body | ConvertTo-Json | gh api "repos/$repo/contents/VERSION" -X PUT --input -
+          echo "Updated VERSION file on $defaultBranch to $version"
