@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --- Build BlockageMonitor (.NET Framework 4.7.2) ---
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore BlockageMonitorSource\BlockageMonitor.sln
+
+      - name: Build BlockageMonitor
+        run: msbuild BlockageMonitorSource\BlockageMonitor.sln /p:Configuration=Release /p:Platform="Any CPU" /m
+
+      # --- Build BlockageSimulator (.NET 10) ---
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build BlockageSimulator
+        run: dotnet build BlockageSimulator\BlockageSimulator.csproj -c Release
