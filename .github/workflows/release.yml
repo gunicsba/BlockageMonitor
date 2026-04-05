@@ -70,6 +70,9 @@ jobs:
           --self-contained
           -o publish\BlockageSimulator
           /p:Version=${{ steps.version.outputs.VERSION }}
+          /p:PublishTrimmed=true
+          /p:PublishSingleFile=true
+          /p:IncludeNativeLibrariesForSelfExtract=true
 
       # --- Package ---
       - name: Package BlockageMonitor
