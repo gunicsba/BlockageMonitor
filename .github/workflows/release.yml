@@ -66,13 +66,8 @@ jobs:
         run: >
           dotnet publish BlockageSimulator\BlockageSimulator.csproj
           -c Release
-          -r win-x64
-          --self-contained
           -o publish\BlockageSimulator
           /p:Version=${{ steps.version.outputs.VERSION }}
-          /p:PublishTrimmed=true
-          /p:PublishSingleFile=true
-          /p:IncludeNativeLibrariesForSelfExtract=true
 
       # --- Package ---
       - name: Package BlockageMonitor
@@ -96,6 +91,13 @@ jobs:
           name: Release v${{ steps.version.outputs.VERSION }}
           tag_name: ${{ steps.version.outputs.TAG }}
           generate_release_notes: true
+          body: |
+            ## Prerequisites
+
+            **BlockageSimulator** requires the .NET Desktop Runtime 10.0 (x64).
+            Download it here: https://dotnet.microsoft.com/en-us/download/dotnet/10.0
+
+          append_body: true
           files: |
             BlockageMonitor-v${{ steps.version.outputs.VERSION }}.zip
             BlockageSimulator-v${{ steps.version.outputs.VERSION }}.zip
