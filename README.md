@@ -32,11 +32,11 @@ Used for traditional blockage monitoring in air seeders and grain drills.
 
 **Example:**
 ```
-0x64, 0x7D, 0x10, 0x50, 0xDB
+0x64, 0x7D, 0x10, 0x50, 0x41
 ```
 - Row 1 (0x10 >> 4 = 1), Module 0 (0x10 & 0x0F = 0)
 - Rate = 80 (0x50)
-- CRC = 0x64 + 0x7D + 0x10 + 0x50 = 0xDB (219)
+- CRC = (0x64 + 0x7D + 0x10 + 0x50) & 0xFF = 0x141 & 0xFF = 0x41 (65)
 
 ### PGN 32301 - Planter Data
 
@@ -66,13 +66,13 @@ Used for precision planting data showing population, skips, and multiples. Compa
 
 **Example:**
 ```
-0x2D, 0x7E, 0x05, 0x64, 0x00, 0x0A, 0x05, 0xF5
+0x2D, 0x7E, 0x05, 0x64, 0x00, 0x0A, 0x05, 0x23
 ```
 - Row 5
 - Population = 100 (0x0064)
 - Skip = 10% (0x0A)
 - Multiple = 5% (0x05)
-- CRC = 0x2D + 0x7E + 0x05 + 0x64 + 0x00 + 0x0A + 0x05 = 0xF5 (245)
+- CRC = (0x2D + 0x7E + 0x05 + 0x64 + 0x00 + 0x0A + 0x05) & 0xFF = 0x123 & 0xFF = 0x23 (35)
 
 ### PGN 32200 - Extended Seeder Data
 
@@ -118,6 +118,24 @@ The stacked bar height represents total population, with color breakdown showing
 - **Planter Mode**: For precision planters with skip/double monitoring (PGN 32301)
 
 Toggle modes via **cogwheel** menu → **Mode**.
+
+## Agroelektronika Bridge
+
+`AgroelektronikaBridge/agroelektronika_bridge.py` reads an Agroelektronika seed monitor controller (up to 12 sensors) over RS232 and forwards it as PGN 32100 to port 25600. The serial protocol is documented in `AgroelektronikaBridge/agroelektronika-seed-monitor-protocol.md`.
+
+```powershell
+pip install -r AgroelektronikaBridge\requirements.txt
+python AgroelektronikaBridge\agroelektronika_bridge.py --list-ports
+python AgroelektronikaBridge\agroelektronika_bridge.py -v                # picks the USB serial adapter, or pass --port COM18
+python AgroelektronikaBridge\agroelektronika_bridge.py --simulate -v      # no hardware needed
+```
+
+- Sensor 1-12 map to rows 0-11 of module 0 (`--module`, `--row-offset` to change).
+- Rate = seed pulses per second × `--scale` (default 5), clamped 1-255, measured over the last `--window` seconds (default 2) and updated every `--interval` (default 0.5 s). `--rate-mode duty` uses the share of time the sensor is active instead.
+- A row's rate is sent when it changes. An unchanged non-zero rate is repeated every `--keepalive` seconds (default 2, keep it below `BlockSeconds`) so a steadily flowing row is not flagged as blocked.
+- When a sensor has no pulses during the last `--window` seconds a single 0 is sent to drop its bar, then the row stays silent, so BlockageMonitor raises the blockage alarm after `BlockSeconds`. A lost serial link stops all packets, so every row times out the same way.
+- Use `--host 192.168.x.255` when BlockageMonitor runs on another machine.
+- `--log rec.csv` records every interval's raw pulse counts, rate and whether it was sent, per sensor, for troubleshooting.
 
 ## Simulator
 
